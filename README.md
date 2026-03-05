@@ -217,3 +217,55 @@ notebooklm skill install
 ## License
 
 MIT License. See [LICENSE](LICENSE) for details.
+
+## TODO
+
+
+## 增加需求
+### 1. 增加一个python脚本，调用README.md中关于CLI的说明，利用notebooklm命令完成如下功能，假设已经登陆，不用处理登陆了：
+首先列出笔记本notebooklm list，用户选择当前笔记本notebooklm use命令
+`notebooklm list --json` 返回json，参考notebook-list.json，注意，所有json的中文内容已经转码不便阅读，需要转回来，ensure_ascii=False
+`notebooklm use fbe2dd1b-02d1-4846-b4ed-c654f93de1cd`
+
+1. source去重，通过source list，遍历id，使用get获取详情， 如果source Tilte，Type， URL相同（URL可能没有），则只保留最后一个，删除使用Id，例如`notebooklm source delete 5cb188dc-9969-4e8a-9269-3be21f35c78d`，每个删除需要用户确认
+  list命令使用如下：
+    ```notebooklm source list --json``` 结果参考：source-list.json
+  get命令使用如下：`notebooklm source get 8cdd6ee1-e357-465b-9b58-245c21fd8bde --json`
+  get命令返回文本：      
+        Source: 8cdd6ee1-e357-465b-9b58-245c21fd8bde
+        Title: 传媒行业2026 年度策略报告： Agent 定义入口，AIGC 重塑供给——AI 时代的流量分发重构与内容产
+        Type: 📄 PDF
+        URL: https://pdf.dfcfw.com/pdf/H3_AP202601091816878674_1.pdf?1767974238000.pdf
+        Created: 2026-03-02 23:38
+
+2. source列表
+输出：Title，URL列表
+
+3. source下载
+遍历source，下载到"{Notebook Title}/"目录中
+对不同类型，使用不同的方式下载
+   3.1 文档类型type为"SourceType.PDF"，"SourceType.DOCX"，"SourceType.PPTX"等，且包含URL，直接下载URL对应目标文件
+   3.2 "type": "SourceType.WEB_PAGE",
+      "url": "https://t.cj.sina.com.cn/articles/view/2405591841/8f626b2100102yjmw",
+       这种使用curl下载整个页面和资源到目录中
+   3.3  "type": "SourceType.MARKDOWN"，且url为null，则用fulltext命令获取内容写入文件
+   3.4 其他类型，没有url，不下载，生成一个空文件加todo
+
+4. 一键下载所有的source，artifact
+
+### 转换web为pdf
+sudo apt-get update
+sudo apt-get install wkhtmltopdf
+wkhtmltopdf https://www.gm7.org/archives/38502 output.pdf
+
+
+### 修改notebook_batch.py，查看调用README.md中关于CLI的说明，此脚本利用notebooklm命令完成一些功能
+1. source web的html形式下载改为使用wkhtmltopdf下载，软件已存在，如果没有，安装命令
+sudo apt-get update
+sudo apt-get install 
+wkhtmltopdf命令示例如下：wkhtmltopdf https://www.gm7.org/archives/38502 output.pdf
+2. source list输出成markdown 表格方式
+3. 如果下载时目录中文件已经存在，则不再下载
+
+### 支持note下载
+/opsx/propose @notebook_batch.py增加支持note下载为markdown文件， 全部下载增加支持note下载，对source， artifacts，note下载到不同子目录中，note下载参考notebooklm note get d60a1c1a-66fe-4f22-b6fb-28af201217a3

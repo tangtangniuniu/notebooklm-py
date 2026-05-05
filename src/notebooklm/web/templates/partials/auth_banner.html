@@ -1,0 +1,6 @@
+<div id="auth-banner" class="banner {% if auth_ok %}hidden{% endif %}">
+  <strong>Not signed in.</strong>
+  <span class="detail">{% if auth_detail %}{{ auth_detail }}{% else %}Run <code>notebooklm login</code> in your terminal, then click Refresh.{% endif %}</span>
+  <span class="spacer"></span>
+  <button id="auth-refresh-btn" class="btn">Refresh auth</button>
+</div>

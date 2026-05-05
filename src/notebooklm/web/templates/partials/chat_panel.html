@@ -1,0 +1,22 @@
+<section class="panel" data-tab="chat">
+  <div class="panel-header">
+    <span class="title">Chat</span>
+    <button class="btn btn-sm" id="conv-list-btn" title="Past conversations">Conversations…</button>
+    <button class="btn btn-sm" id="new-conv-btn" title="Start new conversation">+ New</button>
+    <button class="btn btn-sm" id="export-md-btn" title="Export current conversation as Markdown">⇩ Markdown</button>
+  </div>
+  <div class="chat">
+    <div class="chat-history" id="chat-history">
+      <div class="chat-empty">
+        <div class="big">Ask anything about this notebook.</div>
+        <div>Your conversation is auto-saved and can be exported as Markdown.</div>
+      </div>
+    </div>
+    <div class="chat-input-wrap">
+      <div class="chat-input">
+        <textarea id="chat-input" rows="1" placeholder="Type a question (Enter to send, Shift+Enter for newline)" data-auth-required></textarea>
+        <button class="btn btn-primary" id="send-btn" data-auth-required>Send</button>
+      </div>
+    </div>
+  </div>
+</section>

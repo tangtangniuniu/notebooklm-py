@@ -1,0 +1,11 @@
+Vendored frontend dependencies for notebooklm-py UI.
+
+These files are bundled inside the wheel so the UI renders fully offline. To
+update them, replace the file and bump the version listed here. Each file
+documents its source origin in the leading comment.
+
+htmx.min.js          1.9.12   (https://unpkg.com/htmx.org@1.9.12/dist/htmx.min.js)
+alpine.min.js        3.14.1   (https://unpkg.com/alpinejs@3.14.1/dist/cdn.min.js)
+tailwind.min.css     3.4.13   (compiled subset; see tailwind.min.css header)
+sse.js                local    (notebooklm reconnecting EventSource helper)
+app.js                local    (page-level glue code)

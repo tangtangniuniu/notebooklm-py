@@ -7,6 +7,44 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Source → Markdown conversion (`[markdown]` extra)** — new `notebooklm.conversion` package converts every readable source to Markdown:
+  - Web pages: primary path is `https://markdown.new/<url>`; on failure (4xx/5xx, rate limiting, HTML-error-page response, network error) it transparently falls back to a local `httpx` + `markdownify` pipeline.
+  - PDF / DOCX / PPTX: downloaded then converted via Microsoft's `markitdown` library, off-thread so the orchestrator's event loop is never blocked.
+  - Public API: `url_to_markdown`, `file_to_markdown`, `source_to_markdown`, plus `ConversionOptions` / `ConversionResult` dataclasses.
+  - Configurable via four environment variables: `NOTEBOOKLM_MARKDOWN_NEW_BASE`, `NOTEBOOKLM_DISABLE_MARKDOWN_NEW`, `NOTEBOOKLM_CONVERSION_TIMEOUT`, `NOTEBOOKLM_CONVERSION_UA`. See [docs/configuration.md](docs/configuration.md).
+  - Install via `pip install "notebooklm-py[markdown]"` (or `[all]`).
+- `notebook_batch.py source-download` and the web UI's batch dialog gain `--keep-original` (also keep the original `.pdf` / `.docx` / `.pptx` binary alongside the produced `.md`) and `--legacy-pdf` (escape hatch — see Migration below).
+- `SourceType.PPTX` enum member (was previously missing despite being referenced by the standalone batch script).
+- **`SourceType.IMAGE` sources now download as-is** via the batch flow — previously they produced a `<title>.todo` placeholder. The orchestrator picks the file extension from the response `Content-Type` (with a fallback to the URL path's extension, then `.png` as the default), and re-running a batch skips images that already exist under any known extension.
+- **Slash-retry recovery on source-fetch `404` / `403`** — every source-fetching path (image streamer, CSV download, file-to-Markdown, markdown.new remote attempt, local fallback) now retries exactly once with the URL path's trailing slash toggled when the host returns `404` or `403`. Successful retries are surfaced with a trailing ` (slash-retry)` suffix on the item's progress message (e.g. `image:cover.png (slash-retry)`, `[download (slash-retry)] data.csv`). Other error statuses and transport errors are unchanged.
+- **Web UI (optional `[ui]` extra)** — `notebooklm ui` launches a local FastAPI server with a three-panel browser interface (Sources / Chat / Studio) inspired by the official NotebookLM layout.
+  - **Auto-saved Q&A history** persisted per notebook at `~/.notebooklm/conversations/<id>.jsonl`, with one-click Markdown export.
+  - **Batch downloads** with live per-item progress, skip-if-exists semantics, and parity with `notebook_batch.py` (sources by type, every artifact category, notes).
+  - **Source deduplication** UI matching the `notebook_batch.py dedup` flow.
+  - Loopback-only by default; reuses existing `notebooklm login` storage; in-UI **Refresh auth** button.
+  - Static assets bundled inside the wheel — no Node toolchain or network connection required to render the UI.
+  - Install: `pip install "notebooklm-py[ui]"`. See [docs/web-ui.md](docs/web-ui.md).
+- **`sanitize_filename` helper** (`notebooklm._filename`) shared between the new UI and `notebook_batch.py`-style flows; preserves CJK characters.
+- **`ConversationStore`** (`notebooklm._history`) — append-only JSONL store with `append_turn`, `list_conversations`, `replay`, and `export_markdown` operations; safe under concurrent writes.
+
+### Changed
+- **BREAKING**: `WEB_PAGE` sources now download as `<title>.md` (via the source-markdown-conversion capability) instead of `<title>.pdf` (via `wkhtmltopdf`). The system PDF tool is no longer a hard dependency for the default flow.
+- **BREAKING**: `PDF` / `DOCX` / `PPTX` sources now download as `<title>.md` (via `markitdown`) instead of the original binary. Pass `--keep-original` (CLI) or check **Keep original** (web UI) to also retain the binary alongside the `.md`.
+- `CSV` sources are unchanged: they continue to download as `<title>.csv` because converting to a Markdown table loses spreadsheet utility.
+- Batch progress messages gain new prefixes: `[markdown.new]`, `[fallback]`, `[markitdown]`, `[fulltext]`, `[legacy-pdf]`.
+- **Default batch concurrency raised from 3 to 5** and the accepted range is now `1..10`. Values outside that range are rejected by the `/api/jobs` endpoint with HTTP 400, and by `notebook_batch.py source-download --concurrency` via argparse. The web UI batch dialog gains a slider (`min=1 max=10 value=5`) replacing the previous hard-coded `3`.
+- `notebook_batch.py` CSV downloads switch from `urllib.request.urlretrieve` to `httpx` (needed so the slash-retry helper can inspect the response headers); error messages now include the HTTP status.
+
+### Migration
+- One-release escape hatch: pass `--legacy-pdf` to `notebook_batch.py source-download` (or check **Legacy PDF (wkhtmltopdf)** in the web UI) to restore the previous web-page → PDF behavior. This flag will be removed in a future minor version.
+- Scripts that grep batch output directories for `.pdf` files should switch to `.md` (or use `--legacy-pdf` until they can adapt).
+- Set `NOTEBOOKLM_DISABLE_MARKDOWN_NEW=1` to opt out of routing URLs through `markdown.new` (uses the local fallback exclusively).
+- See [docs/troubleshooting.md](docs/troubleshooting.md) for the full migration guide.
+
+### Deprecated
+- `notebook_batch.py` is superseded by the web UI for interactive flows. The script still works; new functionality lands in the UI.
+
 ## [0.3.4] - 2026-03-12
 
 ### Added

@@ -35,6 +35,22 @@ Issues = "https://github.com/teng-lin/notebooklm-py/issues"
 
 [project.optional-dependencies]
 browser = ["playwright>=1.40.0"]
+ui = [
+    "fastapi>=0.110.0",
+    "uvicorn[standard]>=0.27.0",
+    "sse-starlette>=2.0.0",
+    "jinja2>=3.1.0",
+    "python-multipart>=0.0.9",
+]
+markdown = [
+    "markitdown[all]>=0.0.1",
+    "markdownify>=0.11.6",
+]
+build = [
+    "nuitka>=2.0",
+    "ordered-set>=4.1.0",
+    "zstandard>=0.22.0",
+]
 dev = [
     "pytest>=8.0.0",
     "pytest-asyncio>=0.23.0",
@@ -48,7 +64,7 @@ dev = [
     "ruff>=0.4.0",
     "vcrpy>=6.0.0",
 ]
-all = ["notebooklm-py[browser,dev]"]
+all = ["notebooklm-py[browser,ui,markdown,dev]"]
 
 [project.scripts]
 notebooklm = "notebooklm.notebooklm_cli:main"
@@ -87,6 +103,18 @@ replacement = '](https://github.com/teng-lin/notebooklm-py/blob/v$HFPR_VERSION/S
 [tool.hatch.build.targets.wheel]
 packages = ["src/notebooklm"]
 force-include = {"SKILL.md" = "notebooklm/data/SKILL.md", "AGENTS.md" = "notebooklm/data/CODEX.md"}
+
+[tool.hatch.build.targets.wheel.shared-data]
+# Templates and static assets are tracked via package data because they live
+# inside the package tree (src/notebooklm/web/templates, src/notebooklm/web/static).
+
+[tool.hatch.build]
+include = [
+    "src/notebooklm/**/*.py",
+    "src/notebooklm/web/templates/**/*",
+    "src/notebooklm/web/static/**/*",
+    "src/notebooklm/data/**/*",
+]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

@@ -1,0 +1,48 @@
+<div id="add-source-modal" class="modal-backdrop hidden">
+  <div class="modal">
+    <div class="modal-header">
+      <h3>Add source</h3>
+      <button class="btn-icon close-btn" title="Close">×</button>
+    </div>
+    <div class="modal-tabs">
+      <button class="active" data-tab="url">URL</button>
+      <button data-tab="text">Text</button>
+      <button data-tab="youtube">YouTube</button>
+      <button data-tab="file">File</button>
+    </div>
+    <div class="modal-body">
+      <div data-pane="url">
+        <div class="field">
+          <label for="add-url-input">URL</label>
+          <input type="url" id="add-url-input" placeholder="https://example.com/article">
+        </div>
+      </div>
+      <div data-pane="text" class="hidden">
+        <div class="field">
+          <label for="add-text-title">Title</label>
+          <input type="text" id="add-text-title" placeholder="Pasted text">
+        </div>
+        <div class="field">
+          <label for="add-text-content">Content</label>
+          <textarea id="add-text-content" rows="10"></textarea>
+        </div>
+      </div>
+      <div data-pane="youtube" class="hidden">
+        <div class="field">
+          <label for="add-youtube-input">YouTube URL</label>
+          <input type="url" id="add-youtube-input" placeholder="https://www.youtube.com/watch?v=…">
+        </div>
+      </div>
+      <div data-pane="file" class="hidden">
+        <div class="field">
+          <label for="add-file-input">File (PDF, DOCX, MD, TXT…)</label>
+          <input type="file" id="add-file-input">
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn close-btn">Cancel</button>
+      <button class="btn btn-primary" data-kind="url">Add</button>
+    </div>
+  </div>
+</div>

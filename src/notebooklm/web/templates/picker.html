@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+{% block title %}NotebookLM — pick a notebook{% endblock %}
+{% block main %}
+<main class="picker-wrap">
+  <div class="picker-title">Your notebooks</div>
+  <div class="picker-subtitle">Select a notebook to start.</div>
+  <div id="picker-grid" class="picker-grid">
+    <div class="muted">Loading…</div>
+  </div>
+</main>
+{% endblock %}
+{% block scripts %}
+<script type="module">
+  async function loadPicker() {
+    const grid = document.getElementById("picker-grid");
+    try {
+      const { notebooks } = await window._api("/api/notebooks");
+      if (notebooks.length === 0) {
+        grid.innerHTML = '<div class="muted">No notebooks yet.</div>';
+        return;
+      }
+      grid.innerHTML = "";
+      for (const nb of notebooks) {
+        const card = document.createElement("div");
+        card.className = "picker-card";
+        card.innerHTML = `
+          <div class="nb-title"></div>
+          <div class="nb-meta"></div>`;
+        card.querySelector(".nb-title").textContent = nb.title || "(untitled)";
+        const meta = [];
+        if (nb.created_at) meta.push(new Date(nb.created_at).toLocaleDateString());
+        if (nb.source_count) meta.push(`${nb.source_count} sources`);
+        card.querySelector(".nb-meta").textContent = meta.join(" · ");
+        card.addEventListener("click", () => {
+          window.location = `/notebook/${nb.id}`;
+        });
+        grid.appendChild(card);
+      }
+    } catch (e) {
+      grid.innerHTML = `<div class="banner">${e.message}</div>`;
+    }
+  }
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", loadPicker);
+  } else {
+    loadPicker();
+  }
+</script>
+{% endblock %}

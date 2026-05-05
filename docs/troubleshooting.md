@@ -283,6 +283,85 @@ notebooklm login
 # Or copy a fresh storage_state.json from another machine
 ```
 
+### Source → Markdown Migration (BREAKING in 0.4.0)
+
+**My scripts grep for `.pdf` files in batch downloads — what changed?**
+
+Starting with 0.4.0, `WEB_PAGE`, `PDF`, `DOCX`, and `PPTX` sources download
+as `<title>.md` by default (instead of `<title>.pdf` / the original binary).
+This makes the output more LLM-friendly and removes the hard dependency on
+`wkhtmltopdf`.
+
+**Quick fixes:**
+
+- **One-release escape hatch**: revert web-page sources to PDF output by
+  passing `--legacy-pdf` to `notebook_batch.py source-download` (or check
+  **Legacy PDF (wkhtmltopdf)** in the web UI's batch dialog). This flag will
+  be removed in a future minor version, so use it only as a stop-gap.
+
+- **Keep both formats**: pass `--keep-original` (CLI) or check **Keep
+  original** (web UI) to retain the binary `.pdf` / `.docx` / `.pptx`
+  alongside the produced `.md`. This works only for office documents, not
+  for web pages.
+
+- **Update your scripts**: switch `*.pdf` lookups to `*.md`, since the new
+  default produces Markdown for every readable source. CSV files are
+  unchanged (`*.csv`).
+
+**My web-page conversions are failing or returning truncated content.**
+
+The default path uses `https://markdown.new/<url>`. If it returns 4xx/5xx,
+an HTML error page, or a network error, the orchestrator transparently falls
+back to a local `httpx` + `markdownify` fetch. Look for `[fallback]` in the
+progress messages to confirm the local path is taking over.
+
+If both paths fail, the item is marked `error` with both failure causes in
+its message field. Common fixes:
+
+- The destination requires JavaScript rendering — `markdown.new` and the
+  static fallback both fail. Use `--legacy-pdf` for a one-shot PDF render
+  via `wkhtmltopdf`, or capture the page another way.
+- The local fallback is being blocked by a User-Agent filter. Override the
+  UA: `export NOTEBOOKLM_CONVERSION_UA="Mozilla/5.0 ..."`.
+- An HTTP proxy or firewall is between you and either endpoint. Configure
+  standard `HTTPS_PROXY` / `HTTP_PROXY` env vars; both `httpx` calls honor
+  them.
+
+**I don't want to route URLs through `markdown.new`.**
+
+Set `NOTEBOOKLM_DISABLE_MARKDOWN_NEW=1` before launching the web UI or
+running `notebook_batch.py`. The orchestrator will skip the remote attempt
+and use only the local fallback. URLs never leave your machine.
+
+**`markitdown is required for file-to-Markdown conversion`.**
+
+Install the optional dependency:
+
+```bash
+pip install "notebooklm-py[markdown]"
+```
+
+This pulls in `markitdown[all]` and `markdownify`. The base install does not
+require either; only the file→Markdown and HTML→Markdown paths need them.
+
+**Image sources save as `.png` even though the original is a JPEG (or vice versa).**
+
+The orchestrator picks the image extension by sniffing the response
+`Content-Type` first. If the host doesn't send a `Content-Type` (or sends
+something generic like `application/octet-stream`), we look at the URL path's
+extension. If neither yields an answer, we default to `.png`. The bytes are
+saved correctly regardless — only the filename's extension is suboptimal.
+Most image viewers ignore the extension and detect the format from the file
+header.
+
+**Images with embedded scripts (SVG-as-XSS).**
+
+We save SVG sources verbatim, which means an SVG containing a `<script>` tag
+will execute that script if you open the file in a browser. Treat sources
+from untrusted notebooks the same way you'd treat any untrusted file — open
+them in a sandbox or convert them out of SVG first. We don't strip script
+content from images by design (we don't claim to sanitize them).
+
 ### URL Expiry
 
 Download URLs for audio/video are temporary:

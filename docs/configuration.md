@@ -13,7 +13,8 @@ All data is stored under `~/.notebooklm/` by default:
 ~/.notebooklm/
 ├── storage_state.json    # Authentication cookies and session
 ├── context.json          # CLI context (active notebook, conversation)
-└── browser_profile/      # Persistent Chromium profile
+├── browser_profile/      # Persistent Chromium profile
+└── conversations/        # Web UI Q&A history (one .jsonl per notebook)
 ```
 
 You can relocate all files by setting `NOTEBOOKLM_HOME`:
@@ -82,6 +83,55 @@ A persistent Chromium user data directory used during `notebooklm login`.
 | `NOTEBOOKLM_AUTH_JSON` | Inline authentication JSON (for CI/CD) | - |
 | `NOTEBOOKLM_LOG_LEVEL` | Logging level: `DEBUG`, `INFO`, `WARNING`, `ERROR` | `WARNING` |
 | `NOTEBOOKLM_DEBUG_RPC` | Legacy: Enable RPC debug logging (use `LOG_LEVEL=DEBUG` instead) | `false` |
+| `NOTEBOOKLM_MARKDOWN_NEW_BASE` | Override the markdown.new base URL used for web→Markdown conversion | `https://markdown.new/` |
+| `NOTEBOOKLM_DISABLE_MARKDOWN_NEW` | Set to `1` to skip the markdown.new attempt and run only the local fallback | unset |
+| `NOTEBOOKLM_CONVERSION_TIMEOUT` | Per-request timeout in seconds for both remote and local conversion fetches | `30` |
+| `NOTEBOOKLM_CONVERSION_UA` | User-Agent header for the local fallback HTTP request | browser-like default |
+
+### Source-to-Markdown conversion (`NOTEBOOKLM_MARKDOWN_NEW_BASE`, `NOTEBOOKLM_DISABLE_MARKDOWN_NEW`, `NOTEBOOKLM_CONVERSION_TIMEOUT`, `NOTEBOOKLM_CONVERSION_UA`)
+
+The batch downloader (web UI and `notebook_batch.py`) converts every readable
+source to Markdown:
+
+- **Web pages** → `https://markdown.new/<original-url>` (primary), with a
+  local `httpx` + `markdownify` fallback when the remote returns 4xx/5xx,
+  is rate-limited, or returns an HTML error page.
+- **PDF / DOCX / PPTX** → downloaded then converted via the `markitdown`
+  library (install via `pip install "notebooklm-py[markdown]"`).
+- **CSV** → direct binary download (Markdown would lose spreadsheet utility).
+
+**Concurrency**: the web UI batch dialog exposes a slider (range `1..10`,
+default `5`); out-of-range values are rejected with HTTP 400. The
+standalone `notebook_batch.py source-download` script accepts the same
+`--concurrency N` flag for parity, but runs sequentially — the flag is
+informational for now.
+
+**Slash-retry**: every source-fetch path (image, CSV, markdown.new,
+local fallback, file-to-markdown) retries once with the URL's path-trailing
+slash toggled when the first attempt returns `404` or `403`. Successful
+recoveries are surfaced with a ` (slash-retry)` suffix on the progress
+message. No env var controls this — it's always on.
+
+Tune the conversion via these environment variables (all optional):
+
+```bash
+# Use a private mirror instead of the public markdown.new endpoint.
+export NOTEBOOKLM_MARKDOWN_NEW_BASE="https://md-mirror.internal/"
+
+# Disable the remote attempt entirely — useful in air-gapped environments
+# or when you'd rather not route URLs through a third-party service.
+export NOTEBOOKLM_DISABLE_MARKDOWN_NEW=1
+
+# Slow networks may need a longer per-request timeout (seconds).
+export NOTEBOOKLM_CONVERSION_TIMEOUT=60
+
+# Some sites require a particular User-Agent for the local fallback path.
+export NOTEBOOKLM_CONVERSION_UA="my-org-bot/1.0 (+https://my-org.example/bot)"
+```
+
+**Privacy note**: routing URLs through `markdown.new` exposes those URLs to
+a third party. Set `NOTEBOOKLM_DISABLE_MARKDOWN_NEW=1` if your sources include
+sensitive or private URLs.
 
 ### NOTEBOOKLM_HOME
 

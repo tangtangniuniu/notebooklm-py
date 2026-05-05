@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% block title %}NotebookLM — Notebook{% endblock %}
+{% block header_extra %}
+<a class="nb-title" href="/" id="nb-switcher" title="Switch notebook">📚 Open notebook</a>
+{% endblock %}
+{% block header_actions %}
+<button class="btn" id="batch-btn" data-auth-required>Download…</button>
+{% endblock %}
+{% block main %}
+<div class="tabbar">
+  <button class="active" data-tab="sources">Sources</button>
+  <button data-tab="chat">Chat</button>
+  <button data-tab="studio">Studio</button>
+</div>
+<div class="panels">
+  {% include "partials/sources_panel.html" %}
+  {% include "partials/chat_panel.html" %}
+  {% include "partials/studio_panel.html" %}
+</div>
+{% endblock %}
+{% block dialogs %}
+{% include "partials/add_source_modal.html" %}
+{% include "partials/dedup_modal.html" %}
+{% include "partials/batch_modal.html" %}
+{% include "partials/conversations_drawer.html" %}
+{% include "partials/job_drawer.html" %}
+{% endblock %}
+{% block scripts %}
+<script>
+  window.NB_ID = "{{ notebook_id }}";
+</script>
+{% endblock %}

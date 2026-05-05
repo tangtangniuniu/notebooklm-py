@@ -1,0 +1,16 @@
+<section class="panel" data-tab="sources">
+  <div class="panel-header">
+    <span class="title">Sources</span>
+    <button class="btn btn-sm btn-primary" id="add-source-btn" data-auth-required>+ Add</button>
+    <button class="btn btn-sm" id="dedup-btn" data-auth-required title="Find duplicates">Dedup</button>
+  </div>
+  <div class="panel-toolbar">
+    <input type="search" id="source-search" placeholder="Filter sources…">
+  </div>
+  <div id="bulk-bar" class="panel-toolbar hidden">
+    <span class="count muted"></span>
+    <span style="flex:1"></span>
+    <button class="btn btn-sm btn-danger" id="bulk-delete-btn">Delete</button>
+  </div>
+  <div class="panel-body flush" id="sources-list"></div>
+</section>

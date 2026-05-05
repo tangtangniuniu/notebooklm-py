@@ -1,0 +1,38 @@
+<div id="batch-modal" class="modal-backdrop hidden">
+  <div class="modal">
+    <div class="modal-header">
+      <h3>Batch download</h3>
+      <button class="btn-icon" id="close-batch-modal" title="Close">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="field">
+        <label for="batch-target">Target directory</label>
+        <input type="text" id="batch-target" placeholder="./downloads">
+      </div>
+      <div class="field">
+        <label>Categories</label>
+        <div class="categories"></div>
+      </div>
+      <label class="list-item" style="cursor:pointer">
+        <input type="checkbox" id="batch-force"> <span>Force re-download (overwrite existing files)</span>
+      </label>
+      <div class="field">
+        <label for="batch-concurrency">
+          Concurrency: <span id="batch-concurrency-value">3</span>
+        </label>
+        <input
+          type="range"
+          id="batch-concurrency"
+          min="1"
+          max="10"
+          value="3"
+          oninput="document.getElementById('batch-concurrency-value').textContent = this.value"
+        >
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" id="close-batch-modal">Cancel</button>
+      <button class="btn btn-primary" id="start-batch-btn">Start download</button>
+    </div>
+  </div>
+</div>

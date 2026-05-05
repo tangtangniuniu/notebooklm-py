@@ -93,9 +93,26 @@ pip install notebooklm-py
 # With browser login support (required for first-time setup)
 pip install "notebooklm-py[browser]"
 playwright install chromium
+
+# Try the local web UI (Sources / Chat / Studio panels, batch downloads,
+# auto-saved Q&A history with Markdown export — see docs/web-ui.md):
+pip install "notebooklm-py[ui]"
+notebooklm ui
+
+# Source → Markdown conversion (web pages, PDF/DOCX/PPTX). The web UI's
+# batch download and notebook_batch.py both produce .md by default.
+pip install "notebooklm-py[markdown]"
 ```
 
 If `playwright install chromium` fails with `TypeError: onExit is not a function`, see the Linux workaround in [Troubleshooting](docs/troubleshooting.md#linux).
+
+> **Note (BREAKING in 0.4.0)**: web-page, PDF, DOCX, and PPTX sources now
+> download as Markdown by default (previously web pages were rendered to PDF
+> via `wkhtmltopdf`, and office documents were left as binary blobs).
+> `wkhtmltopdf` is no longer required for the default flow. Pass
+> `--legacy-pdf` to `notebook_batch.py source-download` (or check **Legacy PDF
+> (wkhtmltopdf)** in the web UI) to opt back in for one release. See the
+> [CHANGELOG](CHANGELOG.md) for migration notes.
 
 ### Development Installation
 

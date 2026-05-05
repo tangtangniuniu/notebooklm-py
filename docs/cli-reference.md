@@ -243,6 +243,44 @@ These CLI capabilities are not available in NotebookLM's web interface:
 | **Save chat to note** | `ask "..." --save-as-note` / `history --save` | Save Q&A answers or full conversation as notebook notes |
 | **Programmatic sharing** | `share` commands | Manage permissions without the UI |
 
+### Source → Markdown Conversion (batch)
+
+The standalone `notebook_batch.py source-download` script (and the equivalent
+**Sources** category in the web UI's batch dialog) converts every readable
+source to Markdown by default. Run `python notebook_batch.py source-download
+--help` for the full flag list:
+
+| Flag | Effect |
+|------|--------|
+| `--keep-original` | Also keep the original PDF/DOCX/PPTX binary alongside the produced `.md` file |
+| `--legacy-pdf` | Restore the previous behavior of converting `WEB_PAGE` sources to `.pdf` via `wkhtmltopdf` (one-release escape hatch; will be removed) |
+
+Progress messages use these prefixes:
+
+| Prefix | Meaning |
+|---|---|
+| `[markdown.new]` | Web page converted via the remote `markdown.new` service |
+| `[fallback]` | Web page converted via the local `httpx` + `markdownify` fallback |
+| `[markitdown]` | PDF / DOCX / PPTX converted via the `markitdown` library |
+| `[fulltext]` | `MARKDOWN` / `PASTED_TEXT` source written from `source fulltext` |
+| `[legacy-pdf]` | Web page converted via `wkhtmltopdf` (only when `--legacy-pdf` is set) |
+| `[download]` | Direct binary download (CSV) |
+| `[image]` | Image source downloaded as-is; extension picked from `Content-Type`, URL path, then `.png` default |
+| `[skip]` | Target file already exists; pass `--force` (web UI) to overwrite |
+
+Any of the above prefixes may gain a trailing ` (slash-retry)` suffix when
+the source URL returned `404`/`403` on the first attempt and the helper's
+retry (with the path's trailing slash toggled) succeeded. Example:
+`[markdown.new (slash-retry)] example.md`.
+
+The `source-download` subcommand also accepts `--concurrency N` (range
+`1..10`, default `5`). The flag is currently informational for this
+sequential script — parallelization is done by the web UI orchestrator —
+but values outside the range are rejected at argparse time.
+
+The conversion module honors several environment variables — see
+[configuration.md](configuration.md#source-to-markdown-conversion-notebooklm_markdown_new_base-notebooklm_disable_markdown_new-notebooklm_conversion_timeout-notebooklm_conversion_ua).
+
 ---
 
 ## Detailed Command Reference

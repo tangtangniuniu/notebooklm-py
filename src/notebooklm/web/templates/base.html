@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}NotebookLM{% endblock %}</title>
+  <link rel="stylesheet" href="/static/styles.css">
+  {% block head %}{% endblock %}
+</head>
+<body>
+  <div class="app">
+    <header class="header">
+      <span class="brand"><span class="logo">N</span> NotebookLM</span>
+      {% block header_extra %}{% endblock %}
+      <span class="spacer"></span>
+      <span class="actions">{% block header_actions %}{% endblock %}</span>
+    </header>
+    {% include "partials/auth_banner.html" %}
+    {% block main %}{% endblock %}
+    {% block dialogs %}{% endblock %}
+  </div>
+  <script type="module" src="/static/app.js"></script>
+  {% block scripts %}{% endblock %}
+</body>
+</html>

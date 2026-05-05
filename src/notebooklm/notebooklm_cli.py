@@ -145,6 +145,12 @@ cli.add_command(skill)
 cli.add_command(research)
 cli.add_command(language)
 
+# Register the optional `ui` command. Importing here keeps it lazy so users
+# without the [ui] extra still get a clear error only if they actually run it.
+from .cli.ui import ui_command  # noqa: E402
+
+cli.add_command(ui_command)
+
 
 # =============================================================================
 # MAIN ENTRY POINT

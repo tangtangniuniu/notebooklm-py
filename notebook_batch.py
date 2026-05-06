@@ -268,11 +268,16 @@ _TYPE_EXT_MAP = {
     "SourceType.CSV": ".csv",
 }
 
-# String forms of the office source types that should now route through the
-# new ``notebooklm.conversion`` module (download + markitdown → Markdown).
-_FILE_TYPES_TO_MARKDOWN = ("SourceType.PDF", "SourceType.DOCX", "SourceType.PPTX")
-# Direct binary download (Markdown conversion would lose downstream utility).
-_DIRECT_DOWNLOAD_TYPES = ("SourceType.CSV",)
+# Aligned with the web UI's download approach:
+#   - WEB_PAGE (URL)        → Markdown via ``notebooklm.conversion``
+#   - IMAGE                 → direct binary download (extension at runtime)
+#   - PDF / DOCX / PPTX / CSV → direct binary download (preserve original)
+_DIRECT_DOWNLOAD_TYPES = (
+    "SourceType.PDF",
+    "SourceType.DOCX",
+    "SourceType.PPTX",
+    "SourceType.CSV",
+)
 # Image source — direct download with extension picked at runtime.
 _IMAGE_TYPE = "SourceType.IMAGE"
 
@@ -288,11 +293,37 @@ def _ext_from_url(url):
     return None
 
 
+def _url_looks_like_image(url):
+    """Return True when ``url``'s path ends in a known image extension.
+
+    NotebookLM only assigns ``SourceType.IMAGE`` to images uploaded directly
+    via the UI; images added by URL come back as ``SourceType.WEB_PAGE``.
+    This helper lets the downloader route ``.png`` / ``.jpg`` / etc. URLs
+    through the binary image path instead of the Markdown converter.
+    """
+    from urllib.parse import urlparse
+
+    from notebooklm.conversion._images import known_image_extensions
+
+    if not url:
+        return False
+    path = urlparse(url).path
+    _, ext = os.path.splitext(path)
+    if not ext:
+        return False
+    candidate = ext.lower()
+    # Accept canonical extensions plus the common ``.jpeg`` / ``.tiff`` spellings.
+    return candidate in known_image_extensions() or candidate in {".jpeg", ".tiff"}
+
+
 def _run_markdown_conversion(url, source_kind_str, target_path, keep_original):
     """Synchronous wrapper around ``notebooklm.conversion.source_to_markdown``.
 
-    ``source_kind_str`` is the CLI's string representation (e.g. ``"SourceType.PDF"``).
-    Returns the conversion strategy on success; raises on failure.
+    Used only for ``WEB_PAGE`` sources — PDF/DOCX/PPTX now go through the
+    direct binary download path to match the web UI's "其他格式直接下载"
+    behavior. ``source_kind_str`` is the CLI's string representation
+    (e.g. ``"SourceType.WEB_PAGE"``). Returns the conversion strategy on
+    success; raises on failure.
     """
     import asyncio
 
@@ -360,8 +391,8 @@ def _download_image_source(url, base_dir, safe_title):
     return final, "done", retried
 
 
-def _download_csv_source(url, filepath):
-    """Download a CSV (or other direct-binary) source to ``filepath``.
+def _download_binary_source(url, filepath):
+    """Download a binary source (PDF/DOCX/PPTX/CSV) to ``filepath``.
 
     Uses ``fetch_with_slash_retry`` so a 404/403 with a misnormalized URL
     gets one retry with the trailing slash toggled. Returns True when the
@@ -392,17 +423,28 @@ def _download_csv_source(url, filepath):
 
 
 def cmd_source_download(base_dir=None, keep_original=False, legacy_pdf=False, concurrency=5):
-    """Download all sources with type-specific strategies.
+    """Download all sources, mirroring the web UI's strategy split.
 
-    Default behavior produces ``.md`` for ``WEB_PAGE``, ``PDF``, ``DOCX``, and
-    ``PPTX`` sources via the ``notebooklm.conversion`` module. ``CSV`` stays a
-    direct download. ``MARKDOWN`` and ``PASTED_TEXT`` come from the CLI's
-    ``source fulltext`` command.
+    Three categories of behavior:
 
-    Set ``keep_original=True`` to keep the original ``.pdf``/``.docx``/``.pptx``
-    binary alongside the produced ``.md``. Set ``legacy_pdf=True`` to revert
-    ``WEB_PAGE`` sources to the previous ``wkhtmltopdf`` path (one-release
-    escape hatch).
+    * ``WEB_PAGE`` (URL) → Markdown via ``notebooklm.conversion``
+      (``markdown.new`` with a local fallback).
+    * ``IMAGE``          → direct binary download; extension picked at runtime
+      from the response Content-Type / URL path.
+    * ``PDF`` / ``DOCX`` / ``PPTX`` / ``CSV`` → direct binary download
+      (preserve the original file). This matches the web UI's
+      "其他格式直接下载" behavior.
+
+    ``MARKDOWN`` / ``PASTED_TEXT`` come from the CLI's ``source fulltext``
+    command. Anything else falls back to a ``.todo`` placeholder.
+
+    ``keep_original`` is accepted for backwards compatibility but is now a
+    no-op for sources (binaries are always kept since we no longer convert
+    PDF/DOCX/PPTX to Markdown). It is still honored by ``WEB_PAGE`` →
+    Markdown via ``ConversionOptions``.
+
+    Set ``legacy_pdf=True`` to revert ``WEB_PAGE`` sources to the previous
+    ``wkhtmltopdf`` path (one-release escape hatch).
 
     ``concurrency`` is accepted for parity with the web UI / orchestrator
     (range 1..10, default 5) but currently informational only — this script
@@ -437,21 +479,8 @@ def cmd_source_download(base_dir=None, keep_original=False, legacy_pdf=False, co
         safe_title = sanitize_filename(title)
 
         # Determine strategy based on type and URL.
-        if stype in _FILE_TYPES_TO_MARKDOWN and url:
-            # PDF / DOCX / PPTX → Markdown via markitdown.
-            filename = safe_title + ".md"
-            filepath = base_dir / filename
-            if filepath.exists():
-                print(f"  [skip] {filename} (exists)")
-                continue
-            try:
-                strategy = _run_markdown_conversion(url, stype, filepath, keep_original)
-                print(f"  [{strategy}] {filename}")
-            except Exception as e:
-                print(f"    Error: {e}")
-
-        elif stype in _DIRECT_DOWNLOAD_TYPES and url:
-            # Direct file download (CSV stays binary).
+        if stype in _DIRECT_DOWNLOAD_TYPES and url:
+            # PDF / DOCX / PPTX / CSV → direct binary download (preserve original).
             ext = _ext_from_url(url) or _TYPE_EXT_MAP.get(stype, ".bin")
             filename = safe_title + ext
             filepath = base_dir / filename
@@ -459,15 +488,21 @@ def cmd_source_download(base_dir=None, keep_original=False, legacy_pdf=False, co
                 print(f"  [skip] {filename} (exists)")
                 continue
             try:
-                retried = _download_csv_source(url, filepath)
+                retried = _download_binary_source(url, filepath)
             except Exception as e:
                 print(f"    Error: {e}")
                 continue
             label = "download (slash-retry)" if retried else "download"
             print(f"  [{label}] {filename}")
 
-        elif stype == _IMAGE_TYPE and url:
+        elif (stype == _IMAGE_TYPE and url) or (
+            stype == "SourceType.WEB_PAGE" and url and _url_looks_like_image(url)
+        ):
             # IMAGE: download as-is, with extension picked at runtime.
+            # NotebookLM classifies images-by-URL as WEB_PAGE, so we also
+            # match WEB_PAGE URLs whose path ends in a known image extension
+            # (.png, .jpg, .gif, .webp, …) to keep them out of the Markdown
+            # converter.
             try:
                 final, status, retried = _download_image_source(url, base_dir, safe_title)
             except Exception as e:
@@ -504,7 +539,7 @@ def cmd_source_download(base_dir=None, keep_original=False, legacy_pdf=False, co
                 except Exception as e:
                     print(f"    Error: {e}")
             else:
-                # New default: convert web page to Markdown via markdown.new (with fallback).
+                # Default: convert web page to Markdown via markdown.new (with fallback).
                 filename = safe_title + ".md"
                 filepath = base_dir / filename
                 if filepath.exists():
@@ -789,12 +824,14 @@ def main():
 
     sd_parser = sub.add_parser(
         "source-download",
-        help="Download all sources (web/PDF/DOCX/PPTX as Markdown by default)",
+        help="Download sources (WEB_PAGE→Markdown; PDF/DOCX/PPTX/CSV/IMAGE→direct download)",
     )
     sd_parser.add_argument(
         "--keep-original",
         action="store_true",
-        help="Also keep the original PDF/DOCX/PPTX binary alongside the .md file",
+        help="For WEB_PAGE→Markdown conversion, also keep the intermediate "
+        "downloaded file. No-op for direct binary downloads (originals are "
+        "always preserved).",
     )
     sd_parser.add_argument(
         "--legacy-pdf",

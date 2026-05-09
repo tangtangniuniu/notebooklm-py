@@ -527,6 +527,133 @@ class SourcesAPI:
 
         return source
 
+    async def find_duplicates(
+        self,
+        notebook_id: str,
+        by: str = "url",
+    ) -> builtins.list[builtins.list[Source]]:
+        """Find groups of duplicate sources in a notebook.
+
+        Sources without a comparable key (e.g. text sources when matching
+        by URL) are skipped.
+
+        Args:
+            notebook_id: The notebook ID.
+            by: Match key — "url" (default), "title", or "both".
+
+        Returns:
+            List of duplicate groups, each a list of Source objects sharing
+            the same key. Singletons are not returned.
+        """
+        sources = await self.list(notebook_id)
+        groups: dict[str, builtins.list[Source]] = {}
+        for src in sources:
+            key = self._dedup_key(src, by)
+            if key is None:
+                continue
+            groups.setdefault(key, []).append(src)
+        return [g for g in groups.values() if len(g) > 1]
+
+    async def dedupe(
+        self,
+        notebook_id: str,
+        by: str = "url",
+        keep: str = "oldest",
+        dry_run: bool = False,
+    ) -> dict[str, Any]:
+        """Delete duplicate sources, keeping one source per duplicate group.
+
+        Args:
+            notebook_id: The notebook ID.
+            by: Match key — "url" (default), "title", or "both".
+            keep: Which source to keep per group — "oldest" (default),
+                "newest", "first", or "last".
+            dry_run: If True, return what would be deleted without deleting.
+
+        Returns:
+            Dict with keys "groups" (list of duplicate groups), "kept"
+            (list of survivors), and "deleted" (list of removed sources).
+        """
+        groups = await self.find_duplicates(notebook_id, by=by)
+        kept: builtins.list[Source] = []
+        deleted: builtins.list[Source] = []
+        for group in groups:
+            keeper, removed = self.pick_duplicate_keeper(group, keep)
+            kept.append(keeper)
+            for src in removed:
+                if not dry_run:
+                    try:
+                        await self.delete(notebook_id, src.id)
+                    except Exception as e:
+                        logger.warning("Failed to delete duplicate source %s: %s", src.id, e)
+                        continue
+                deleted.append(src)
+        return {"groups": groups, "kept": kept, "deleted": deleted}
+
+    @staticmethod
+    def pick_duplicate_keeper(
+        group: builtins.list[Source], keep: str = "oldest"
+    ) -> tuple[Source, builtins.list[Source]]:
+        """Pick which source to keep from a duplicate group.
+
+        Args:
+            group: List of duplicate Source objects (must be non-empty).
+            keep: "oldest", "newest", "first", or "last".
+
+        Returns:
+            (keeper, removed) tuple.
+        """
+        if not group:
+            raise ValueError("Cannot pick keeper from empty group")
+
+        if keep in ("oldest", "newest"):
+            with_ts = [s for s in group if s.created_at is not None]
+            if with_ts:
+                with_ts.sort(key=lambda s: s.created_at)  # type: ignore[arg-type, return-value]
+                keeper = with_ts[0] if keep == "oldest" else with_ts[-1]
+            else:
+                keeper = group[0] if keep == "oldest" else group[-1]
+        elif keep == "first":
+            keeper = group[0]
+        elif keep == "last":
+            keeper = group[-1]
+        else:
+            raise ValueError(f"Invalid keep value: {keep!r}")
+
+        removed = [s for s in group if s.id != keeper.id]
+        return keeper, removed
+
+    @staticmethod
+    def _dedup_key(src: Source, by: str) -> str | None:
+        """Build a comparison key for a source, or None if not comparable."""
+        if by == "url":
+            return SourcesAPI._normalize_url(src.url) if src.url else None
+        if by == "title":
+            return src.title.strip() if src.title else None
+        if by == "both":
+            url_key = SourcesAPI._normalize_url(src.url) if src.url else ""
+            title_key = src.title.strip() if src.title else ""
+            if not url_key and not title_key:
+                return None
+            return f"{url_key}\x00{title_key}"
+        raise ValueError(f"Invalid 'by' value: {by!r} (expected url|title|both)")
+
+    @staticmethod
+    def _normalize_url(url: str) -> str:
+        """Normalize a URL for duplicate comparison.
+
+        Lowercases scheme and host, strips trailing slash, drops fragment.
+        """
+        try:
+            parsed = urlparse(url.strip())
+        except (AttributeError, ValueError):
+            return url.strip()
+        scheme = (parsed.scheme or "").lower()
+        netloc = (parsed.netloc or "").lower()
+        path = parsed.path.rstrip("/") or "/"
+        query = f"?{parsed.query}" if parsed.query else ""
+        return f"{scheme}://{netloc}{path}{query}"
+
     async def delete(self, notebook_id: str, source_id: str) -> bool:
         """Delete a source from a notebook.
 

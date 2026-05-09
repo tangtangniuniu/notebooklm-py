@@ -215,18 +215,10 @@ def cmd_dedup():
         for src in to_delete:
             print(f"  Delete:  index={src['index']}  id={src['id']}")
             try:
-                confirm = input("    Confirm delete? [y/N]: ").strip().lower()
-            except (EOFError, KeyboardInterrupt):
-                print("\n    Skipped.")
-                continue
-            if confirm == "y":
-                try:
-                    run_cmd(["notebooklm", "source", "delete", src["id"], "-y", "-n", nb_id])
-                    print("    Deleted.")
-                except RuntimeError as e:
-                    print(f"    Error: {e}")
-            else:
-                print("    Skipped.")
+                run_cmd(["notebooklm", "source", "delete", src["id"], "-y", "-n", nb_id])
+                print("    Deleted.")
+            except RuntimeError as e:
+                print(f"    Error: {e}")
         print()
 
     if not duplicates_found:

@@ -9,6 +9,7 @@ Commands:
     stale        Check if a URL/Drive source needs refresh
     delete       Delete a source
     delete-by-title Delete a source by exact title
+    dedupe       Find and delete duplicate sources
     rename       Rename a source
     refresh      Refresh a URL/Drive source
     add-drive    Add a Google Drive document
@@ -54,6 +55,7 @@ def source():
       stale        Check if source needs refresh
       delete       Delete a source
       delete-by-title Delete a source by exact title
+      dedupe       Find and delete duplicate sources
       rename       Rename a source
       refresh      Refresh a URL/Drive source
 
@@ -405,6 +407,133 @@ def source_delete_by_title(ctx, title, notebook_id, yes, client_auth):
                 console.print(f"[green]Deleted source:[/green] {source.id}")
             else:
                 console.print("[yellow]Delete may have failed[/yellow]")
+
+    return _run()
+
+
+@source.command("dedupe")
+@click.option(
+    "-n",
+    "--notebook",
+    "notebook_id",
+    default=None,
+    help="Notebook ID (uses current if not set)",
+)
+@click.option(
+    "--by",
+    type=click.Choice(["url", "title", "both"]),
+    default="url",
+    help="Match duplicates by URL (default), title, or both",
+)
+@click.option(
+    "--keep",
+    type=click.Choice(["oldest", "newest", "first", "last"]),
+    default="oldest",
+    help="Which copy to keep per duplicate group (default: oldest)",
+)
+@click.option("--dry-run", is_flag=True, help="Show duplicates without deleting")
+@click.option("--yes", "-y", is_flag=True, help="Skip confirmation")
+@click.option("--json", "json_output", is_flag=True, help="Output as JSON")
+@with_client
+def source_dedupe(ctx, notebook_id, by, keep, dry_run, yes, json_output, client_auth):
+    """Find and delete duplicate sources in a notebook.
+
+    \b
+    Examples:
+      source dedupe                       # Match by URL, keep oldest
+      source dedupe --by title            # Match by exact title
+      source dedupe --by both --keep newest
+      source dedupe --dry-run             # Preview only
+    """
+    from .._sources import SourcesAPI
+
+    nb_id = require_notebook(notebook_id)
+
+    async def _run():
+        async with NotebookLMClient(client_auth) as client:
+            nb_id_resolved = await resolve_notebook_id(client, nb_id)
+            groups = await client.sources.find_duplicates(nb_id_resolved, by=by)
+
+            if not groups:
+                if json_output:
+                    json_output_response(
+                        {"groups": [], "kept": [], "deleted": [], "deleted_count": 0}
+                    )
+                else:
+                    console.print("[green]No duplicate sources found.[/green]")
+                return
+
+            previews = [SourcesAPI.pick_duplicate_keeper(g, keep) for g in groups]
+            total_to_delete = sum(len(removed) for _, removed in previews)
+
+            if not json_output:
+                console.print(
+                    f"[yellow]Found {len(groups)} duplicate group(s) "
+                    f"({total_to_delete} source(s) to delete):[/yellow]"
+                )
+                for i, (keeper, removed) in enumerate(previews, 1):
+                    console.print(f"\n[bold]Group {i}[/bold] (match: {by}, keep: {keep})")
+                    console.print(
+                        f"  [green]KEEP[/green] {keeper.id[:12]}...  "
+                        f"{keeper.title or '(untitled)'}  {keeper.url or '-'}"
+                    )
+                    for src in removed:
+                        console.print(
+                            f"  [red]DEL [/red] {src.id[:12]}...  "
+                            f"{src.title or '(untitled)'}  {src.url or '-'}"
+                        )
+
+            if dry_run:
+                if json_output:
+                    json_output_response(
+                        {
+                            "dry_run": True,
+                            "groups": [
+                                {
+                                    "kept": {"id": k.id, "title": k.title, "url": k.url},
+                                    "deleted": [
+                                        {"id": s.id, "title": s.title, "url": s.url} for s in r
+                                    ],
+                                }
+                                for k, r in previews
+                            ],
+                            "deleted_count": total_to_delete,
+                        }
+                    )
+                else:
+                    console.print("\n[dim]Dry run — nothing deleted.[/dim]")
+                return
+
+            if not yes and not click.confirm(f"\nDelete {total_to_delete} duplicate source(s)?"):
+                return
+
+            deleted: list = []
+            failed: list = []
+            for _, removed in previews:
+                for src in removed:
+                    try:
+                        await client.sources.delete(nb_id_resolved, src.id)
+                        deleted.append(src)
+                    except Exception as e:
+                        failed.append((src, str(e)))
+
+            if json_output:
+                json_output_response(
+                    {
+                        "deleted_count": len(deleted),
+                        "failed_count": len(failed),
+                        "deleted": [{"id": s.id, "title": s.title, "url": s.url} for s in deleted],
+                        "failed": [
+                            {"id": s.id, "title": s.title, "error": err} for s, err in failed
+                        ],
+                    }
+                )
+            else:
+                console.print(f"\n[green]Deleted {len(deleted)} duplicate source(s).[/green]")
+                if failed:
+                    console.print(f"[red]Failed to delete {len(failed)} source(s).[/red]")
+                    for src, err in failed:
+                        console.print(f"  {src.id[:12]}... {src.title or '-'}: {err}")
 
     return _run()
 

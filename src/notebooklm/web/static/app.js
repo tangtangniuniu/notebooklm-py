@@ -126,6 +126,7 @@ function renderSourceRow(src) {
     type: "checkbox",
     "data-src-id": src.id,
     on: {
+      click: (e) => e.stopPropagation(),
       change: (e) => {
         if (e.target.checked) SELECTED_SOURCE_IDS.add(src.id);
         else SELECTED_SOURCE_IDS.delete(src.id);
@@ -133,9 +134,24 @@ function renderSourceRow(src) {
       },
     },
   });
+  const deleteBtn = el("button", {
+    class: "btn-icon",
+    title: "Delete",
+    on: {
+      click: (e) => {
+        e.stopPropagation();
+        deleteSource(src.id);
+      },
+    },
+  }, "×");
   const row = el(
     "div",
-    { class: "list-item" },
+    {
+      class: "list-item",
+      style: "cursor: pointer;",
+      title: src.url ? "Open URL in new tab" : "View content",
+      on: { click: () => openSource(src) },
+    },
     checkbox,
     el("div", { class: "icon" }, icon),
     el(
@@ -144,13 +160,41 @@ function renderSourceRow(src) {
       el("div", { class: "title" }, src.title || "(untitled)"),
       el("div", { class: "subtitle" }, src.kind + (src.url ? ` · ${shortenUrl(src.url)}` : "")),
     ),
-    el(
-      "div",
-      { class: "actions" },
-      el("button", { class: "btn-icon", title: "Delete", on: { click: () => deleteSource(src.id) } }, "×"),
-    ),
+    el("div", { class: "actions" }, deleteBtn),
   );
   return row;
+}
+
+function openSource(src) {
+  if (src.url) {
+    window.open(src.url, "_blank", "noopener,noreferrer");
+    return;
+  }
+  openSourceViewModal(src);
+}
+
+async function openSourceViewModal(src) {
+  const modal = document.getElementById("source-view-modal");
+  const titleEl = document.getElementById("source-view-title");
+  const metaEl = document.getElementById("source-view-meta");
+  const contentEl = document.getElementById("source-view-content");
+  titleEl.textContent = src.title || "(untitled)";
+  metaEl.textContent = `${src.kind}`;
+  contentEl.textContent = "Loading…";
+  modal.classList.remove("hidden");
+  try {
+    const ft = await api(`/api/notebooks/${CURRENT_NB}/sources/${src.id}/fulltext`);
+    contentEl.textContent = ft.content || "(empty)";
+    const parts = [ft.kind];
+    if (ft.char_count != null) parts.push(`${ft.char_count} chars`);
+    metaEl.textContent = parts.join(" · ");
+  } catch (e) {
+    contentEl.textContent = `Error: ${e.message}`;
+  }
+}
+
+function closeSourceViewModal() {
+  document.getElementById("source-view-modal").classList.add("hidden");
 }
 
 function shortenUrl(u) {
@@ -597,6 +641,11 @@ function wireUp() {
 
   document.getElementById("close-dedup-modal")?.addEventListener("click", closeDedupModal);
   document.getElementById("confirm-dedup-btn")?.addEventListener("click", confirmDedup);
+  document.getElementById("close-source-view-modal")?.addEventListener("click", closeSourceViewModal);
+  document.getElementById("close-source-view-btn")?.addEventListener("click", closeSourceViewModal);
+  document.getElementById("source-view-modal")?.addEventListener("click", (e) => {
+    if (e.target.id === "source-view-modal") closeSourceViewModal();
+  });
 }
 
 document.addEventListener("DOMContentLoaded", () => {
